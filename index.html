@@ -374,12 +374,12 @@
   <div class="wrap vk-grid">
     <div class="vk-mark reveal" aria-hidden="true">
       <svg viewBox="0 0 120 160" xmlns="http://www.w3.org/2000/svg">
-       <!--  <rect x="6" y="6" width="108" height="148" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <!-- <rect x="6" y="6" width="108" height="148" fill="none" stroke="currentColor" stroke-width="1.2"/>
         <rect x="14" y="14" width="92" height="132" fill="none" stroke="currentColor" stroke-width=".6" opacity=".5"/>
         <path d="M30 110 Q60 40 90 110" fill="none" stroke="currentColor" stroke-width="1.4"/>
         <circle cx="60" cy="78" r="4" fill="currentColor"/>
         <text x="60" y="148" text-anchor="middle" font-family="Fraunces" font-style="italic" font-size="9" fill="currentColor">वरारोह · कला</text> -->
-      </svg> 
+      </svg>  
     </div>
     <div class="vk-body reveal">
       <span class="eyebrow vk-eyebrow">Our art label</span>
@@ -549,13 +549,21 @@
         <label class="fld" style="grid-column:1/-1"><span class="lbl">Technique</span><input id="f_technique"></label>
       </div>
       <div class="row2">
-        <label class="fld"><span class="lbl">Unit price (USD)</span><input id="f_price" type="number" min="0" step="0.01"></label>
+        <label class="fld"><span class="lbl">Unit price (CAD)</span><input id="f_price" type="number" min="0" step="0.01"></label>
         <label class="fld"><span class="lbl">MOQ (units)</span><input id="f_moq" type="number" min="1" step="1"></label>
       </div>
-      <div class="row2">
+     <!-- <div class="row2">
         <label class="fld"><span class="lbl">Stock on hand</span><input id="f_stock" type="number" min="0" step="1"></label>
         <label class="fld"><span class="lbl">Image URL (optional)</span><input id="f_image" placeholder="https://…"></label>
-      </div>
+      </div>  -->
+<div class="row2">
+  <label class="fld"><span class="lbl">Stock on hand</span><input id="f_stock" type="number" min="0" step="1"></label>
+  <label class="fld">
+    <span class="lbl">Product Image</span>
+    <input type="file" id="f_image_file" accept="image/*" style="padding: 8px 14px;">
+    <input type="hidden" id="f_image">
+  </label>
+</div>
       <label class="fld"><span class="lbl">Description</span><textarea id="f_desc"></textarea></label>
       <label class="fld" style="display:flex;align-items:center;gap:10px;flex-direction:row">
         <input id="f_featured" type="checkbox" style="width:auto"><span class="lbl" style="margin:0">Feature on homepage collection</span>
@@ -1014,7 +1022,57 @@ document.getElementById('modalSave').onclick=async()=>{
   else{DB.products.push({id:p(),...data});}
   await save();closeModal();renderAdmin();renderAll();toast(id?'Product updated':'Product added');
 };
+////image upload
+document.getElementById('f_image_file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
+  const toastElement = document.getElementById('toast');
+  toast( 'Uploading image to GitHub...');
+
+  // 1. Convert file to Base64
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = async () => {
+    const base64Content = reader.result.split(',')[1];
+    const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '-').toLowerCase()}`;
+    
+    // 2. Configuration — Replace with your details or fetch from a secure setting
+    const GITHUB_TOKEN = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"; 
+    const REPO_OWNER = "YOUR_GITHUB_USERNAME";
+    const REPO_NAME = "YOUR_REPO_NAME";
+    const BRANCH = "main"; // or master
+
+    const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/images/${fileName}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${GITHUB_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: `Upload product image: ${fileName}`,
+          content: base64Content,
+          branch: BRANCH
+        })
+      });
+
+      if (response.ok) {
+        // Set the relative local path to be saved in your database object
+        document.getElementById('f_image').value = `images/${fileName}`;
+        toast('Image uploaded successfully to repository!');
+      } else {
+        const errData = await response.json();
+        toast(`Upload failed: ${errData.message}`);
+      }
+    } catch (err) {
+      console.error(err);
+      toast('Error uploading to GitHub API.');
+    }
+  };
+});
 //// toast
 let tT;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),2600);}
