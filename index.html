@@ -1038,9 +1038,9 @@ document.getElementById('f_image_file').addEventListener('change', async (e) => 
     const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '-').toLowerCase()}`;
     
     // 2. Configuration — Replace with your details or fetch from a secure setting
-    const GITHUB_TOKEN = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"; 
-    const REPO_OWNER = "YOUR_GITHUB_USERNAME";
-    const REPO_NAME = "YOUR_REPO_NAME";
+    const GITHUB_TOKEN = "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"; 
+    const REPO_OWNER = "karutrades";
+    const REPO_NAME = "imports";
     const BRANCH = "main"; // or master
 
     const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/images/${fileName}`;
