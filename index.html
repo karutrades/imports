@@ -278,6 +278,13 @@
   .modal-body .row2{margin-bottom:14px}
   .modal-body label.fld{margin-bottom:14px}
   .modal-foot{padding:18px 24px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:12px}
+  .img-uploader{display:flex;gap:16px;align-items:center}
+  .img-preview{width:96px;height:96px;border-radius:10px;border:1px solid var(--line);background:var(--paper-2);overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .img-preview img{width:100%;height:100%;object-fit:cover}
+  .img-preview span{font-family:var(--mono);font-size:10px;color:var(--ink-mute);text-align:center;padding:6px}
+  .img-actions{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+  .upload-btn{cursor:pointer;display:inline-block}
+  .img-status{font-family:var(--mono);font-size:11px;color:var(--ink-mute);min-height:14px}
 
   /* login */
   .login{max-width:360px;margin:8vh auto;text-align:center}
@@ -345,7 +352,7 @@
     <img id="heroLogo" alt="Kāru emblem" class="hero-logo reveal">
     <span class="eyebrow" id="heroEyebrow">Sustainable handicraft &amp; original art · sourced by hand</span>
     <h1 class="reveal" id="heroLine">Objects with a <em>maker’s hand</em> behind them.</h1>
-    <p class="lede reveal" id="heroLede">We source small-batch handicraft and original art made with renewable materials and natural pigments — from artisan workshops across South Asia and East Africa — fully traced, fairly bought, and kind to the ground it came from.</p>
+    <p class="lede reveal" id="heroLede">We source small-batch handicraft and original art made with renewable materials and natural pigments — from artisan workshops across India — fully traced, fairly bought, and kind to the ground it came from.</p>
     <div class="hero-actions reveal">
       <a href="#catalogue" class="btn btn-solid">Browse the catalogue →</a>
       <a href="#inquiry" class="btn btn-ghost">Request wholesale pricing</a>
@@ -379,7 +386,7 @@
         <path d="M30 110 Q60 40 90 110" fill="none" stroke="currentColor" stroke-width="1.4"/>
         <circle cx="60" cy="78" r="4" fill="currentColor"/>
         <text x="60" y="148" text-anchor="middle" font-family="Fraunces" font-style="italic" font-size="9" fill="currentColor">वरारोह · कला</text> -->
-      </svg>  
+      </svg>
     </div>
     <div class="vk-body reveal">
       <span class="eyebrow vk-eyebrow">Our art label</span>
@@ -549,21 +556,25 @@
         <label class="fld" style="grid-column:1/-1"><span class="lbl">Technique</span><input id="f_technique"></label>
       </div>
       <div class="row2">
-        <label class="fld"><span class="lbl">Unit price (CAD)</span><input id="f_price" type="number" min="0" step="0.01"></label>
+        <label class="fld"><span class="lbl">Unit price (USD)</span><input id="f_price" type="number" min="0" step="0.01"></label>
         <label class="fld"><span class="lbl">MOQ (units)</span><input id="f_moq" type="number" min="1" step="1"></label>
       </div>
-     <!-- <div class="row2">
+      <div class="row2">
         <label class="fld"><span class="lbl">Stock on hand</span><input id="f_stock" type="number" min="0" step="1"></label>
-        <label class="fld"><span class="lbl">Image URL (optional)</span><input id="f_image" placeholder="https://…"></label>
-      </div>  -->
-<div class="row2">
-  <label class="fld"><span class="lbl">Stock on hand</span><input id="f_stock" type="number" min="0" step="1"></label>
-  <label class="fld">
-    <span class="lbl">Product Image</span>
-    <input type="file" id="f_image_file" accept="image/*" style="padding: 8px 14px;">
-    <input type="hidden" id="f_image">
-  </label>
-</div>
+        <label class="fld"><span class="lbl">Image URL</span><input id="f_image" placeholder="https://… or upload below"></label>
+      </div>
+      <div class="fld">
+        <span class="lbl">Product image</span>
+        <div class="img-uploader">
+          <div class="img-preview" id="f_preview"><span>No image</span></div>
+          <div class="img-actions">
+            <label class="tbtn upload-btn">↑ Upload to GitHub<input id="f_file" type="file" accept="image/*" style="display:none"></label>
+            <button type="button" class="tbtn" id="f_clearimg">Clear</button>
+            <div class="img-status" id="f_imgstatus"></div>
+          </div>
+        </div>
+        <div class="form-note" id="f_ghhint" style="margin-top:8px"></div>
+      </div>
       <label class="fld"><span class="lbl">Description</span><textarea id="f_desc"></textarea></label>
       <label class="fld" style="display:flex;align-items:center;gap:10px;flex-direction:row">
         <input id="f_featured" type="checkbox" style="width:auto"><span class="lbl" style="margin:0">Feature on homepage collection</span>
@@ -596,7 +607,7 @@ const SEED={
     name:"Kāru", tagline:"Handmade, heartmade.",
     sanskrit:"Hasta · Hṛdaya",
     heroLine:"Objects with a <em>maker’s hand</em> behind them.",
-    heroLede:"We source small-batch handicraft and original art made with renewable materials and natural pigments — from artisan workshops across South Asia and East Africa — fully traced, fairly bought, and kind to the ground it came from.",
+    heroLede:"We source small-batch handicraft and original art made with renewable materials and natural pigments — from artisan workshops across India — fully traced, fairly bought, and kind to the ground it came from.",
     email:"karutrades@gmail.com", phone:"+1 (226) 938-7375", address:"Toronto, Canada",
     lowStock:12, adminPassword:"admin123",
     vararohaName:"Vararoha Kala",
@@ -655,7 +666,47 @@ async function save(){
   if(hasLS){try{localStorage.setItem(KEY,JSON.stringify(DB));return;}catch(e){toast("Couldn't save locally");}}
   mem=DB;
 }
-// ---- Export / Import the whole catalogue as a portable JSON file ----
+// ---- GitHub image upload ----
+const GH_TOKEN_KEY="karu_gh_token";
+function ghToken(){try{return localStorage.getItem(GH_TOKEN_KEY)||'';}catch(e){return '';}}
+function setGhToken(t){try{t?localStorage.setItem(GH_TOKEN_KEY,t):localStorage.removeItem(GH_TOKEN_KEY);}catch(e){}}
+function ghCfg(){return DB.settings.gh||{};}
+function fileToB64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=()=>rej(new Error("read failed"));r.readAsDataURL(file);});}
+function slug(s){return String(s||'img').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40)||'img';}
+function ghMsg(status){
+  if(status===401)return "Token rejected (401) — check the token is correct and not expired.";
+  if(status===403)return "Forbidden (403) — token lacks 'Contents: read & write' on this repo, or rate-limited.";
+  if(status===404)return "Not found (404) — check owner, repo and branch are exact (case-sensitive), and the token can see this repo.";
+  if(status===409)return "Conflict (409) — branch is out of date; try again.";
+  if(status===422)return "Unprocessable (422) — bad path or file already exists.";
+  return "Upload failed ("+status+").";
+}
+async function ghUpload(file, nameHint){
+  const gh=ghCfg(), token=ghToken();
+  if(!gh.owner||!gh.repo)throw new Error("Set your GitHub owner and repo in Settings first.");
+  if(!token)throw new Error("Add your GitHub token in Settings first.");
+  if(file.size>5*1024*1024)throw new Error("Image is over 5MB — please use a smaller file.");
+  const b64=await fileToB64(file);
+  const ext=((file.name.split('.').pop()||'png').toLowerCase().replace(/[^a-z0-9]/g,''))||'png';
+  const folder=(gh.folder||'images').replace(/^\/+|\/+$/g,'');
+  const path=`${folder}/${slug(nameHint||file.name)}-${Date.now()}.${ext}`;
+  const branch=gh.branch||'main';
+  const api=`https://api.github.com/repos/${encodeURIComponent(gh.owner)}/${encodeURIComponent(gh.repo)}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+  const res=await fetch(api,{method:'PUT',headers:{'Authorization':`Bearer ${token}`,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},body:JSON.stringify({message:`Add product image ${path}`,content:b64,branch})});
+  if(!res.ok)throw new Error(ghMsg(res.status));
+  const data=await res.json();
+  return (data.content&&data.content.download_url)||`https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${branch}/${path}`;
+}
+async function ghTest(){
+  const gh=ghCfg(), token=ghToken();
+  if(!gh.owner||!gh.repo||!token)return {ok:false,msg:"Enter owner, repo and token, then Save."};
+  try{
+    const res=await fetch(`https://api.github.com/repos/${encodeURIComponent(gh.owner)}/${encodeURIComponent(gh.repo)}`,{headers:{'Authorization':`Bearer ${token}`,'Accept':'application/vnd.github+json'}});
+    if(!res.ok)return {ok:false,msg:ghMsg(res.status)};
+    const d=await res.json();
+    return {ok:true,msg:`Connected to ${d.full_name} ✓ (default branch: ${d.default_branch})`};
+  }catch(e){return {ok:false,msg:"Network error reaching GitHub."};}
+}
 function exportData(){
   const blob=new Blob([JSON.stringify(DB,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob), a=document.createElement('a');
@@ -952,6 +1003,21 @@ function viewSet(){
     <label class="fld"><span class="lbl">Label tagline</span><input id="s_vtag" value="${esc(s.vararohaTagline||'')}"></label>
     <label class="fld full"><span class="lbl">Label intro</span><textarea id="s_vintro">${esc(s.vararohaIntro||'')}</textarea></label>
   </div>
+  <h3 style="font-family:var(--disp);font-size:22px;font-weight:500;margin:30px 0 4px">Image uploads · GitHub</h3>
+  <div class="admin-sub" style="margin-bottom:14px">Upload product photos straight to your repo's image folder. Token is stored only in this browser and is never included in exports.</div>
+  <div class="settings-grid">
+    <label class="fld"><span class="lbl">GitHub username / owner</span><input id="g_owner" value="${esc((s.gh&&s.gh.owner)||'')}" placeholder="e.g. vipul"></label>
+    <label class="fld"><span class="lbl">Repository name</span><input id="g_repo" value="${esc((s.gh&&s.gh.repo)||'')}" placeholder="e.g. karu-site"></label>
+    <label class="fld"><span class="lbl">Branch</span><input id="g_branch" value="${esc((s.gh&&s.gh.branch)||'main')}"></label>
+    <label class="fld"><span class="lbl">Image folder path</span><input id="g_folder" value="${esc((s.gh&&s.gh.folder)||'images')}"></label>
+    <label class="fld full"><span class="lbl">Personal access token (fine-grained · Contents: read & write)</span><input id="g_token" type="password" value="${esc(ghToken())}" placeholder="github_pat_…"></label>
+  </div>
+  <div class="save-row" style="gap:10px">
+    <button class="btn-add" id="saveGh">Save GitHub settings</button>
+    <button type="button" class="tbtn" id="testGh">Test connection</button>
+    <span class="form-note" id="ghTestMsg"></span>
+  </div>
+  <div class="form-note" style="margin-top:8px;line-height:1.5">⚠ If your site is public, don't hard-code the token into the HTML you commit. Use a fine-grained token limited to this one repo. Public repos mean the images are public.</div>
   <div class="save-row"><button class="btn-add" id="saveSet">Save settings</button>
   <span class="form-note">Note: this admin gate is client-side, fine for a demo. For a live store, pair it with a real backend.</span></div>
   <h3 style="font-family:var(--disp);font-size:22px;font-weight:500;margin:30px 0 4px">Backup &amp; restore</h3>
@@ -972,6 +1038,20 @@ function wireAdmin(){
   document.querySelectorAll('[data-delinq]').forEach(b=>b.onclick=async()=>{if(confirm('Delete this enquiry?')){DB.inquiries=DB.inquiries.filter(x=>x.id!==b.dataset.delinq);await save();renderAdmin();}});
   const ex=document.getElementById('exportBtn'); if(ex)ex.onclick=exportData;
   const imp=document.getElementById('importFile'); if(imp)imp.onchange=e=>{if(e.target.files[0])importData(e.target.files[0]);};
+  const sg=document.getElementById('saveGh');
+  if(sg)sg.onclick=async()=>{
+    DB.settings.gh={owner:val('g_owner').trim(),repo:val('g_repo').trim(),branch:val('g_branch').trim()||'main',folder:val('g_folder').trim()||'images'};
+    setGhToken(val('g_token').trim());
+    await save(); toast('GitHub settings saved');
+  };
+  const tg=document.getElementById('testGh');
+  if(tg)tg.onclick=async()=>{
+    // save first so test uses latest values
+    DB.settings.gh={owner:val('g_owner').trim(),repo:val('g_repo').trim(),branch:val('g_branch').trim()||'main',folder:val('g_folder').trim()||'images'};
+    setGhToken(val('g_token').trim()); await save();
+    const msg=document.getElementById('ghTestMsg'); msg.textContent="Testing…"; msg.style.color='';
+    const r=await ghTest(); msg.textContent=r.msg; msg.style.color=r.ok?'var(--indigo)':'var(--madder)';
+  };
   const ss=document.getElementById('saveSet');
   if(ss)ss.onclick=async()=>{
     const s=DB.settings;
@@ -999,7 +1079,34 @@ function openModal(id){
   f('f_id',p.id);f('f_brand',p.brand||BRANDS.KARU);f('f_name',p.name);f('f_sku',p.sku);f('f_category',p.category);f('f_origin',p.origin);
   f('f_material',p.material);f('f_technique',p.technique);f('f_price',p.price);f('f_moq',p.moq);f('f_stock',p.stock);f('f_image',p.image);f('f_desc',p.desc);
   document.getElementById('f_featured').checked=!!p.featured;
+  // image preview + upload wiring
+  updatePreview(p.image);
+  const hint=document.getElementById('f_ghhint');
+  const gh=ghCfg();
+  if(hint)hint.textContent=(gh.owner&&gh.repo&&ghToken())?`Uploads go to ${gh.owner}/${gh.repo}/${gh.folder||'images'}`:"Tip: set up GitHub uploads in Settings to enable the upload button.";
+  const fileInput=document.getElementById('f_file');
+  fileInput.value='';
+  fileInput.onchange=async e=>{
+    const file=e.target.files[0]; if(!file)return;
+    const st=document.getElementById('f_imgstatus');
+    st.textContent="Uploading…"; st.style.color='';
+    try{
+      const url=await ghUpload(file, val('f_sku')||val('f_name')||'product');
+      f('f_image',url); updatePreview(url);
+      st.textContent="Uploaded ✓"; st.style.color='var(--indigo)';
+    }catch(err){
+      st.textContent=err.message; st.style.color='var(--madder)';
+    }
+    fileInput.value='';
+  };
+  document.getElementById('f_clearimg').onclick=()=>{f('f_image','');updatePreview('');document.getElementById('f_imgstatus').textContent='';};
+  document.getElementById('f_image').oninput=e=>updatePreview(e.target.value);
   document.getElementById('modalBg').classList.add('open');
+}
+function updatePreview(url){
+  const el=document.getElementById('f_preview'); if(!el)return;
+  if(url){el.innerHTML=`<img src="${esc(url)}" alt="preview" onerror="this.parentNode.innerHTML='<span>Image not reachable yet</span>'">`;}
+  else{el.innerHTML='<span>No image</span>';}
 }
 function f(id,v){document.getElementById(id).value=v==null?'':v}
 function closeModal(){document.getElementById('modalBg').classList.remove('open')}
@@ -1022,57 +1129,7 @@ document.getElementById('modalSave').onclick=async()=>{
   else{DB.products.push({id:p(),...data});}
   await save();closeModal();renderAdmin();renderAll();toast(id?'Product updated':'Product added');
 };
-////image upload
-document.getElementById('f_image_file').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
 
-  const toastElement = document.getElementById('toast');
-  toast( 'Uploading image to GitHub...');
-
-  // 1. Convert file to Base64
-  const reader = new FileReader();
-  reader.readAsDataURL(file);
-  reader.onload = async () => {
-    const base64Content = reader.result.split(',')[1];
-    const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '-').toLowerCase()}`;
-    
-    // 2. Configuration — Replace with your details or fetch from a secure setting
-    const GITHUB_TOKEN = "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"; 
-    const REPO_OWNER = "karutrades";
-    const REPO_NAME = "imports";
-    const BRANCH = "main"; // or master
-
-    const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/images/${fileName}`;
-
-    try {
-      const response = await fetch(url, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `token ${GITHUB_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: `Upload product image: ${fileName}`,
-          content: base64Content,
-          branch: BRANCH
-        })
-      });
-
-      if (response.ok) {
-        // Set the relative local path to be saved in your database object
-        document.getElementById('f_image').value = `images/${fileName}`;
-        toast('Image uploaded successfully to repository!');
-      } else {
-        const errData = await response.json();
-        toast(`Upload failed: ${errData.message}`);
-      }
-    } catch (err) {
-      console.error(err);
-      toast('Error uploading to GitHub API.');
-    }
-  };
-});
 //// toast
 let tT;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),2600);}
