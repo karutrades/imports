@@ -518,6 +518,7 @@
     <div class="admin-bar">
       <div class="brand"><img id="adminLogo" alt="Kāru" class="admin-mark"><span class="admin-word">Kāru</span> <span class="tag" style="margin-left:10px">admin</span></div>
       <div style="display:flex;gap:10px">
+        
         <button id="viewSiteBtn">View site</button>
         <button id="logoutBtn">Sign out</button>
       </div>
@@ -608,8 +609,9 @@ const SEED={
     sanskrit:"Hasta · Hṛdaya",
     heroLine:"Objects with a <em>maker’s hand</em> behind them.",
     heroLede:"We source small-batch handicraft and original art made with renewable materials and natural pigments — from artisan workshops across India — fully traced, fairly bought, and kind to the ground it came from.",
-    email:"karutrades@gmail.com", phone:"+1 (226) 938-7375", address:"Toronto, Canada",
+    email:"karutrades@gmail.com", phone:":"+1 (226) 938-7375", address:"Toronto, Canada",
     lowStock:12, adminPassword:"admin123",
+    gh:{owner:"karutrades",repo:"imports",branch:"main",folder:"images",cataloguePath:"data/catalogue.json"},
     vararohaName:"Vararoha Kala",
     vararohaTagline:"Original art, in the same hand.",
     vararohaIntro:"Our fine-art label. Paintings, sculpture and mixed-media works from artists who share the workshop world we source from — each piece signed, dated and one of a kind."
@@ -635,22 +637,62 @@ function p(){return 'p'+Math.random().toString(36).slice(2,9)}
 
 let DB=null;
 
+// --- GitHub catalogue sync ---
+function ghRawURL(){
+  const cfg=(DB&&DB.settings&&DB.settings.gh)||SEED.settings.gh;
+  return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch||'main'}/${cfg.cataloguePath||'data/catalogue.json'}`;
+}
+function ghApiURL(){
+  const cfg=(DB&&DB.settings&&DB.settings.gh)||SEED.settings.gh;
+  return `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.cataloguePath||'data/catalogue.json'}`;
+}
+function strToB64(str){return btoa(unescape(encodeURIComponent(str)));}
+async function ghGetFileSHA(){
+  const token=ghToken();if(!token)return null;
+  try{const res=await fetch(ghApiURL(),{headers:{'Authorization':`Bearer ${token}`,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}});
+    if(res.ok){const d=await res.json();return d.sha||null;}return null;}catch(e){return null;}
+}
+async function ghWriteCatalogue(){
+  const token=ghToken();if(!token)return false;
+  const cfg=(DB&&DB.settings&&DB.settings.gh)||SEED.settings.gh;
+  try{
+    setSyncStatus('syncing');
+    const sha=await ghGetFileSHA();
+    const body={message:'Update Kāru catalogue',content:strToB64(JSON.stringify(DB,null,2)),branch:cfg.branch||'main'};
+    if(sha)body.sha=sha;
+    const res=await fetch(ghApiURL(),{method:'PUT',headers:{'Authorization':`Bearer ${token}`,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},body:JSON.stringify(body)});
+    if(!res.ok){setSyncStatus('error',ghMsg(res.status));return false;}
+    setSyncStatus('ok');return true;
+  }catch(e){setSyncStatus('error','Network error — saved locally');return false;}
+}
+function setSyncStatus(state,msg){
+  const el=document.getElementById('syncStatus');if(!el)return;
+  const map={ok:'\u2713 Synced globally',syncing:'\u21BB Syncing\u2026',error:'\u26a0 Sync failed'};
+  el.textContent=msg||map[state]||'';
+  el.style.color=state==='ok'?'var(--indigo)':state==='error'?'var(--madder)':'var(--ochre)';
+}
 async function load(){
-  if(hasStore){
-    try{const r=await window.storage.get(KEY,SHARED); if(r&&r.value){DB=JSON.parse(r.value); migrate(); return;}}catch(e){}
-    DB=clone(SEED); await save(); return;
-  }
-  if(hasLS){
-    try{const v=localStorage.getItem(KEY); if(v){DB=JSON.parse(v); migrate(); return;}}catch(e){}
-    DB=clone(SEED); await save(); return;
-  }
-  DB=mem||clone(SEED); mem=DB; migrate();
+  // 1. GitHub — global source of truth (public read, no token)
+  try{
+    const res=await fetch(ghRawURL()+'?_='+Date.now());
+    if(res.ok){DB=await res.json();migrate();if(hasLS)try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}return;}
+  }catch(e){}
+  // 2. localStorage cache (offline fallback)
+  if(hasLS){try{const v=localStorage.getItem(KEY);if(v){DB=JSON.parse(v);migrate();return;}}catch(e){}}
+  // 3. Claude storage
+  if(hasStore){try{const r=await window.storage.get(KEY,SHARED);if(r&&r.value){DB=JSON.parse(r.value);migrate();return;}}catch(e){}}
+  // 4. First run
+  DB=clone(SEED);await save();
 }
 function migrate(){
   if(!DB.settings.vararohaName)DB.settings.vararohaName=SEED.settings.vararohaName;
   if(!DB.settings.vararohaTagline)DB.settings.vararohaTagline=SEED.settings.vararohaTagline;
   if(!DB.settings.vararohaIntro)DB.settings.vararohaIntro=SEED.settings.vararohaIntro;
-  if(!DB.settings.sanskrit)DB.settings.sanskrit=SEED.settings.sanskrit;
+  if(!DB.settings.gh)DB.settings.gh=clone(SEED.settings.gh);
+  if(!DB.settings.gh.cataloguePath)DB.settings.gh.cataloguePath="data/catalogue.json";
+  if(!DB.settings.gh.owner)DB.settings.gh.owner="karutrades";
+  if(!DB.settings.gh.repo)DB.settings.gh.repo="imports";
+  if(!DB.settings.gh.branch)DB.settings.gh.branch="main";
   if(DB.settings.tagline==="Handmade, naturally.")DB.settings.tagline="Handmade, heartmade.";
   if(DB.settings.heroLine && DB.settings.heroLine.indexOf("maker's")>-1)DB.settings.heroLine=SEED.settings.heroLine;
   ["Paintings","Sculpture","Mixed media"].forEach(c=>{if(!DB.categories.includes(c))DB.categories.push(c);});
@@ -662,9 +704,12 @@ function migrate(){
   if(!DB.inquiries)DB.inquiries=[];
 }
 async function save(){
-  if(hasStore){try{await window.storage.set(KEY,JSON.stringify(DB),SHARED);return;}catch(e){}}
-  if(hasLS){try{localStorage.setItem(KEY,JSON.stringify(DB));return;}catch(e){toast("Couldn't save locally");}}
+  // Local first (instant)
+  if(hasLS)try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
+  if(hasStore)try{await window.storage.set(KEY,JSON.stringify(DB),SHARED);}catch(e){}
   mem=DB;
+  // Then push to GitHub (global) — non-blocking
+  ghWriteCatalogue();
 }
 // ---- GitHub image upload ----
 const GH_TOKEN_KEY="karu_gh_token";
@@ -1010,11 +1055,13 @@ function viewSet(){
     <label class="fld"><span class="lbl">Repository name</span><input id="g_repo" value="${esc((s.gh&&s.gh.repo)||'')}" placeholder="e.g. karu-site"></label>
     <label class="fld"><span class="lbl">Branch</span><input id="g_branch" value="${esc((s.gh&&s.gh.branch)||'main')}"></label>
     <label class="fld"><span class="lbl">Image folder path</span><input id="g_folder" value="${esc((s.gh&&s.gh.folder)||'images')}"></label>
-    <label class="fld full"><span class="lbl">Personal access token (fine-grained · Contents: read & write)</span><input id="g_token" type="password" value="${esc(ghToken())}" placeholder="github_pat_…"></label>
+    <label class="fld"><span class="lbl">Catalogue file path</span><input id="g_catpath" value="${esc((s.gh&&s.gh.cataloguePath)||'data/catalogue.json')}"></label>
+    <label class="fld full"><span class="lbl">Personal access token (fine-grained · Contents: read &amp; write)</span><input id="g_token" type="password" value="${esc(ghToken())}" placeholder="github_pat_…"></label>
   </div>
   <div class="save-row" style="gap:10px">
     <button class="btn-add" id="saveGh">Save GitHub settings</button>
     <button type="button" class="tbtn" id="testGh">Test connection</button>
+    <button type="button" class="tbtn" id="syncNow">↻ Sync catalogue now</button>
     <span class="form-note" id="ghTestMsg"></span>
   </div>
   <div class="form-note" style="margin-top:8px;line-height:1.5">⚠ If your site is public, don't hard-code the token into the HTML you commit. Use a fine-grained token limited to this one repo. Public repos mean the images are public.</div>
@@ -1040,14 +1087,16 @@ function wireAdmin(){
   const imp=document.getElementById('importFile'); if(imp)imp.onchange=e=>{if(e.target.files[0])importData(e.target.files[0]);};
   const sg=document.getElementById('saveGh');
   if(sg)sg.onclick=async()=>{
-    DB.settings.gh={owner:val('g_owner').trim(),repo:val('g_repo').trim(),branch:val('g_branch').trim()||'main',folder:val('g_folder').trim()||'images'};
+    DB.settings.gh={owner:val('g_owner').trim(),repo:val('g_repo').trim(),branch:val('g_branch').trim()||'main',folder:val('g_folder').trim()||'images',cataloguePath:val('g_catpath').trim()||'data/catalogue.json'};
     setGhToken(val('g_token').trim());
-    await save(); toast('GitHub settings saved');
+    await save(); toast('GitHub settings saved — syncing…');
   };
+  const sn=document.getElementById('syncNow');
+  if(sn)sn.onclick=async()=>{toast('Syncing…');const ok=await ghWriteCatalogue();toast(ok?'Synced to GitHub ✓':'Sync failed — check settings');};
   const tg=document.getElementById('testGh');
   if(tg)tg.onclick=async()=>{
-    // save first so test uses latest values
-    DB.settings.gh={owner:val('g_owner').trim(),repo:val('g_repo').trim(),branch:val('g_branch').trim()||'main',folder:val('g_folder').trim()||'images'};
+											
+    DB.settings.gh={owner:val('g_owner').trim(),repo:val('g_repo').trim(),branch:val('g_branch').trim()||'main',folder:val('g_folder').trim()||'images',cataloguePath:val('g_catpath').trim()||'data/catalogue.json'};
     setGhToken(val('g_token').trim()); await save();
     const msg=document.getElementById('ghTestMsg'); msg.textContent="Testing…"; msg.style.color='';
     const r=await ghTest(); msg.textContent=r.msg; msg.style.color=r.ok?'var(--indigo)':'var(--madder)';
