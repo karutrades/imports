@@ -352,7 +352,7 @@
     <img id="heroLogo" alt="Kāru emblem" class="hero-logo reveal">
     <span class="eyebrow" id="heroEyebrow">Sustainable handicraft &amp; original art · sourced by hand</span>
     <h1 class="reveal" id="heroLine">Objects with a <em>maker’s hand</em> behind them.</h1>
-    <p class="lede reveal" id="heroLede">We source small-batch handicraft and original art made with renewable materials and natural pigments — from artisan workshops across India — fully traced, fairly bought, and kind to the ground it came from.</p>
+    <p class="lede reveal" id="heroLede">We source small-batch handicraft and original art made with renewable materials and natural pigments — from artisan workshops across South Asia and East Africa — fully traced, fairly bought, and kind to the ground it came from.</p>
     <div class="hero-actions reveal">
       <a href="#catalogue" class="btn btn-solid">Browse the catalogue →</a>
       <a href="#inquiry" class="btn btn-ghost">Request wholesale pricing</a>
@@ -381,11 +381,11 @@
   <div class="wrap vk-grid">
     <div class="vk-mark reveal" aria-hidden="true">
       <svg viewBox="0 0 120 160" xmlns="http://www.w3.org/2000/svg">
-        <!-- <rect x="6" y="6" width="108" height="148" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <rect x="6" y="6" width="108" height="148" fill="none" stroke="currentColor" stroke-width="1.2"/>
         <rect x="14" y="14" width="92" height="132" fill="none" stroke="currentColor" stroke-width=".6" opacity=".5"/>
         <path d="M30 110 Q60 40 90 110" fill="none" stroke="currentColor" stroke-width="1.4"/>
         <circle cx="60" cy="78" r="4" fill="currentColor"/>
-        <text x="60" y="148" text-anchor="middle" font-family="Fraunces" font-style="italic" font-size="9" fill="currentColor">वरारोह · कला</text> -->
+        <text x="60" y="148" text-anchor="middle" font-family="Fraunces" font-style="italic" font-size="9" fill="currentColor">वरारोह · कला</text>
       </svg>
     </div>
     <div class="vk-body reveal">
@@ -455,8 +455,8 @@
       <span class="eyebrow">Trade enquiry</span>
       <h2>Let's talk wholesale.</h2>
       <p>Tell us what you stock and we'll send a pricing sheet with MOQs and lead times. We work with retailers, interior designers, and galleries.</p>
-      <div class="contact-line"><span>✉</span><a id="cEmail" href="#">karutrades@gmail.com</a></div>
-      <div class="contact-line"><span>☎</span><span id="cPhone" style="color:var(--ink)">+1 (226) 938-7375</span></div>
+      <div class="contact-line"><span>✉</span><a id="cEmail" href="#">trade@karu.co</a></div>
+      <div class="contact-line"><span>☎</span><span id="cPhone" style="color:var(--ink)">+1 (416) 555-0140</span></div>
       <div class="contact-line"><span>⌖</span><span id="cAddr" style="color:var(--ink)">Toronto, Canada</span></div>
     </div>
     <form class="lead-form reveal" id="leadForm">
@@ -517,8 +517,8 @@
   <div id="adminApp" style="display:none;flex-direction:column;height:100%">
     <div class="admin-bar">
       <div class="brand"><img id="adminLogo" alt="Kāru" class="admin-mark"><span class="admin-word">Kāru</span> <span class="tag" style="margin-left:10px">admin</span></div>
-      <div style="display:flex;gap:10px">
-        
+      <div style="display:flex;gap:10px;align-items:center">
+        <span id="syncStatus" style="font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--sage-soft)"></span>
         <button id="viewSiteBtn">View site</button>
         <button id="logoutBtn">Sign out</button>
       </div>
@@ -608,8 +608,8 @@ const SEED={
     name:"Kāru", tagline:"Handmade, heartmade.",
     sanskrit:"Hasta · Hṛdaya",
     heroLine:"Objects with a <em>maker’s hand</em> behind them.",
-    heroLede:"We source small-batch handicraft and original art made with renewable materials and natural pigments — from artisan workshops across India — fully traced, fairly bought, and kind to the ground it came from.",
-    email:"karutrades@gmail.com", phone:":"+1 (226) 938-7375", address:"Toronto, Canada",
+    heroLede:"We source small-batch handicraft and original art made with renewable materials and natural pigments — from artisan workshops across South Asia and East Africa — fully traced, fairly bought, and kind to the ground it came from.",
+    email:"trade@karu.co", phone:"+1 (416) 555-0140", address:"Toronto, Canada",
     lowStock:12, adminPassword:"admin123",
     gh:{owner:"karutrades",repo:"imports",branch:"main",folder:"images",cataloguePath:"data/catalogue.json"},
     vararohaName:"Vararoha Kala",
@@ -671,20 +671,30 @@ function setSyncStatus(state,msg){
   el.textContent=msg||map[state]||'';
   el.style.color=state==='ok'?'var(--indigo)':state==='error'?'var(--madder)':'var(--ochre)';
 }
+function validDB(d){return d && typeof d==='object' && d.settings && Array.isArray(d.products) && Array.isArray(d.categories);}
 async function load(){
   // 1. GitHub — global source of truth (public read, no token)
   try{
     const res=await fetch(ghRawURL()+'?_='+Date.now());
-    if(res.ok){DB=await res.json();migrate();if(hasLS)try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}return;}
+    if(res.ok){
+      let data=null; try{data=await res.json();}catch(e){}
+      if(validDB(data)){DB=data;migrate();if(hasLS)try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}return;}
+      // file exists but is empty/invalid ({}) -> fall through, then seed & push to populate it
+    }
   }catch(e){}
   // 2. localStorage cache (offline fallback)
-  if(hasLS){try{const v=localStorage.getItem(KEY);if(v){DB=JSON.parse(v);migrate();return;}}catch(e){}}
+  if(hasLS){try{const v=localStorage.getItem(KEY);if(v){const d=JSON.parse(v);if(validDB(d)){DB=d;migrate();return;}}}catch(e){}}
   // 3. Claude storage
-  if(hasStore){try{const r=await window.storage.get(KEY,SHARED);if(r&&r.value){DB=JSON.parse(r.value);migrate();return;}}catch(e){}}
-  // 4. First run
-  DB=clone(SEED);await save();
+  if(hasStore){try{const r=await window.storage.get(KEY,SHARED);if(r&&r.value){const d=JSON.parse(r.value);if(validDB(d)){DB=d;migrate();return;}}}catch(e){}}
+  // 4. First run / self-heal empty file — seed and push to GitHub
+  DB=clone(SEED);migrate();await save();
 }
 function migrate(){
+  if(!DB||typeof DB!=='object')DB=clone(SEED);
+  if(!DB.settings||typeof DB.settings!=='object')DB.settings=clone(SEED.settings);
+  if(!Array.isArray(DB.categories)||!DB.categories.length)DB.categories=clone(SEED.categories);
+  if(!Array.isArray(DB.products))DB.products=clone(SEED.products);
+  if(!Array.isArray(DB.inquiries))DB.inquiries=[];
   if(!DB.settings.vararohaName)DB.settings.vararohaName=SEED.settings.vararohaName;
   if(!DB.settings.vararohaTagline)DB.settings.vararohaTagline=SEED.settings.vararohaTagline;
   if(!DB.settings.vararohaIntro)DB.settings.vararohaIntro=SEED.settings.vararohaIntro;
@@ -1095,7 +1105,6 @@ function wireAdmin(){
   if(sn)sn.onclick=async()=>{toast('Syncing…');const ok=await ghWriteCatalogue();toast(ok?'Synced to GitHub ✓':'Sync failed — check settings');};
   const tg=document.getElementById('testGh');
   if(tg)tg.onclick=async()=>{
-											
     DB.settings.gh={owner:val('g_owner').trim(),repo:val('g_repo').trim(),branch:val('g_branch').trim()||'main',folder:val('g_folder').trim()||'images',cataloguePath:val('g_catpath').trim()||'data/catalogue.json'};
     setGhToken(val('g_token').trim()); await save();
     const msg=document.getElementById('ghTestMsg'); msg.textContent="Testing…"; msg.style.color='';
